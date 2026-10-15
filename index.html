@@ -64,12 +64,23 @@
   }
 
   async function api(payload){
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(Object.assign({ idToken: liff.getIDToken() }, payload)),
-    });
-    return res.json();
+    let res;
+    try {
+      res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ idToken: liff.getIDToken() }, payload)),
+      });
+    } catch (err) {
+      const e = new Error('ระบบหลังบ้าน (Apps Script) ตอบกลับไม่ถูกต้อง กรุณาแจ้งอาจารย์ [' + err.message + ']');
+      e.stage = 'server'; throw e;
+    }
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch (err) {
+      const e = new Error('Apps Script ไม่ได้ส่ง JSON กลับมา: ' + text.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
+      e.stage = 'server'; throw e;
+    }
   }
 
   function b64ToBlob(b64, type){
@@ -118,6 +129,8 @@
         status('warn', 'ยังไม่ได้ลงทะเบียน LINE ในรายวิชา',
                'กรุณากดปุ่มด้านล่างเพื่อลงทะเบียนด้วยรหัสนักศึกษา แล้วกลับมาเปิดลิงก์นี้อีกครั้ง');
         $('registerBtn').classList.remove('hidden');
+      } else if (r.status === 'not_enrolled') {
+        status('warn', 'ไม่พบรายชื่อในรายวิชานี้', r.message);
       } else if (r.status === 'no_file') {
         status('warn', 'ยังไม่มีไฟล์ของคุณ', 'รหัสนักศึกษา ' + r.id + ' กรุณาติดต่ออาจารย์ประจำวิชา');
       } else {
@@ -125,7 +138,8 @@
       }
       if (liff.isInClient()) $('closeBtn').classList.remove('hidden');
     } catch (err) {
-      status('err', 'เปิดหน้านี้ไม่สำเร็จ', 'กรุณาเปิดลิงก์จากแอป LINE อีกครั้ง (' + err.message + ')');
+      if (err.stage === 'server') status('err', 'เชื่อมต่อระบบไม่สำเร็จ', err.message);
+      else status('err', 'เปิดหน้านี้ไม่สำเร็จ', 'กรุณาเปิดลิงก์จากแอป LINE อีกครั้ง (' + err.message + ')');
     }
   })();
 </script>
